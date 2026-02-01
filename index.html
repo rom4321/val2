@@ -1,0 +1,227 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Will You Be My Valentine? ❤️</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; overflow: hidden; background: #fff5f7; }
+        .font-romantic { font-family: 'Dancing Script', cursive; }
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(-100vh) rotate(360deg); opacity: 0; }
+        }
+        .heart-particle {
+            position: absolute;
+            bottom: -50px;
+            pointer-events: none;
+            animation: float linear infinite;
+            color: #ffb7c5;
+            z-index: 0;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 182, 193, 0.3);
+        }
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+    </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom": "https://esm.sh/react-dom@18.2.0/client",
+    "@google/genai": "https://esm.sh/@google/genai@1.39.0",
+    "react/": "https://esm.sh/react@^19.2.4/"
+  }
+}
+</script>
+
+    <script type="module">
+        import React, { useState, useEffect, useRef } from 'react';
+        import ReactDOM from 'react-dom';
+        import { GoogleGenAI } from "@google/genai";
+
+        const NO_PHRASES = [
+            "No", "Are you sure?", "Really sure??", "Think again!", "Last chance!", 
+            "Surely not?", "You might regret this!", "Give it another thought!", 
+            "Are you absolutely sure?", "This could be a mistake!", "Have a heart!", 
+            "Don't be so cold!", "Change of heart?", "Wouldn't you reconsider?", 
+            "Is that your final answer?", "You're breaking my heart ;(", "I'm gonna cry...", 
+            "You're being very mean!", "I'll be very sad...", "I'll give you cookies!", 
+            "I'll buy you flowers!", "Please please please!", "Don't do this to me!", 
+            "I'm devastated!", "Is it because I'm a robot?", "Look at my sad eyes!", 
+            "Yes is right there ->", "Wait! Think about the kittens!", "I'll write you a poem!", 
+            "Fine. But I'm staying here.", "Pookie please?", "You're doing this on purpose!",
+            "I'm still here...", "Still no?", "Seriously?", "My heart is a puddle.",
+            "I will wait forever.", "I'm not leaving!", "Click the red one!", "Pleeeease?"
+        ];
+
+        const HeartIcon = ({ className }) => (
+            <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+                <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a.752.752 0 01-.704 0l-.003-.001z" />
+            </svg>
+        );
+
+        const HeartBackground = () => {
+            const [particles, setParticles] = useState([]);
+            useEffect(() => {
+                const p = Array.from({ length: 20 }).map((_, i) => ({
+                    id: i,
+                    left: Math.random() * 100,
+                    size: Math.random() * 30 + 10,
+                    duration: Math.random() * 10 + 5,
+                    delay: Math.random() * 5
+                }));
+                setParticles(p);
+            }, []);
+
+            return (
+                <div className="fixed inset-0 pointer-events-none overflow-hidden">
+                    {particles.map(p => (
+                        <div key={p.id} className="heart-particle" style={{
+                            left: `${p.left}%`,
+                            width: `${p.size}px`,
+                            animationDuration: `${p.duration}s`,
+                            animationDelay: `${p.delay}s`
+                        }}>
+                            <HeartIcon />
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [noCount, setNoCount] = useState(0);
+            const [accepted, setAccepted] = useState(false);
+            const [yesButtonSize, setYesButtonSize] = useState(1);
+            const [recipientName, setRecipientName] = useState('');
+            const [generatedLetter, setGeneratedLetter] = useState('');
+            const [isGenerating, setIsGenerating] = useState(false);
+
+            const handleNo = () => {
+                setNoCount(noCount + 1);
+                setYesButtonSize(yesButtonSize + 0.35);
+            };
+
+            const handleYes = () => setAccepted(true);
+
+            const generateLetter = async (e) => {
+                e.preventDefault();
+                if (!recipientName) return;
+                setIsGenerating(true);
+                try {
+                    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                    const response = await ai.models.generateContent({
+                        model: 'gemini-3-flash-preview',
+                        contents: `Write a short, super sweet Valentine's Day message for ${recipientName}. Keep it under 60 words and very romantic.`
+                    });
+                    setGeneratedLetter(response.text);
+                } catch (err) {
+                    setGeneratedLetter("My love for you is so big, even the AI got shy! Happy Valentine's Day!");
+                }
+                setIsGenerating(false);
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-6 relative">
+                    <HeartBackground />
+                    
+                    <main className={`glass-card z-10 w-full max-w-md p-8 rounded-[2rem] shadow-2xl transition-all duration-700 transform ${accepted ? 'scale-105' : 'scale-100'}`}>
+                        {!accepted ? (
+                            <div className="text-center space-y-6">
+                                <img 
+                                    src={noCount === 0 ? "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHp1eHN3bjZ0am05ZjJ1bjRmcXU4amU4amV4amV4amV4amV4amV4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/K6m5D6vL0tUnVovt3r/giphy.gif" : "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHp1eHN3bjZ0am05ZjJ1bjRmcXU4amU4amV4amV4amV4amV4amV4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/OPU6wUKARA3NTIBmcy/giphy.gif"} 
+                                    className="w-40 h-40 mx-auto rounded-2xl object-cover border-4 border-white shadow-md mb-4" 
+                                    alt="Valentine GIF" 
+                                />
+                                <h1 className="text-4xl md:text-5xl font-romantic text-red-600 font-bold leading-tight">
+                                    Will you be my Valentine?
+                                </h1>
+                                <div className="flex flex-col items-center gap-4 pt-4">
+                                    <button 
+                                        onClick={handleYes}
+                                        style={{ transform: `scale(${Math.min(yesButtonSize, 15)})` }}
+                                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-transform duration-200 active:scale-95 flex items-center gap-2 z-20"
+                                    >
+                                        <HeartIcon className="w-5 h-5" /> Yes
+                                    </button>
+                                    <button 
+                                        onClick={handleNo}
+                                        className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-6 rounded-full text-sm transition-all active:scale-90"
+                                    >
+                                        {NO_PHRASES[noCount % NO_PHRASES.length]}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center space-y-6 animate-in fade-in zoom-in duration-500">
+                                <img 
+                                    src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHp1eHN3bjZ0am05ZjJ1bjRmcXU4amU4amV4amV4amV4amV4amV4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/v96839mK7y3vWnt83w/giphy.gif" 
+                                    className="w-48 h-48 mx-auto rounded-3xl object-cover shadow-xl border-4 border-pink-400" 
+                                    alt="Celebration GIF" 
+                                />
+                                <h2 className="text-5xl font-romantic text-pink-600 font-bold">I knew you'd say Yes!</h2>
+                                <p className="text-gray-600 italic">You've made my heart skip a beat.</p>
+                                
+                                <div className="pt-6 border-t border-pink-100">
+                                    {!generatedLetter ? (
+                                        <form onSubmit={generateLetter} className="space-y-4">
+                                            <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Want a special note?</p>
+                                            <input 
+                                                type="text" 
+                                                placeholder="Enter your name..." 
+                                                className="w-full px-4 py-2 rounded-xl border-2 border-pink-100 focus:border-pink-300 outline-none text-center"
+                                                value={recipientName}
+                                                onChange={(e) => setRecipientName(e.target.value)}
+                                            />
+                                            <button 
+                                                disabled={isGenerating || !recipientName}
+                                                className="w-full bg-pink-500 text-white font-bold py-3 rounded-xl hover:bg-pink-600 disabled:opacity-50 transition-colors shadow-md"
+                                            >
+                                                {isGenerating ? 'Writing magic...' : 'Generate Love Note'}
+                                            </button>
+                                        </form>
+                                    ) : (
+                                        <div className="bg-pink-50 p-6 rounded-2xl border border-pink-200 italic text-gray-700 shadow-inner animate-in slide-in-from-bottom-4">
+                                            "{generatedLetter}"
+                                            <button 
+                                                onClick={() => setGeneratedLetter('')}
+                                                className="block mx-auto mt-4 text-xs font-bold text-pink-400 hover:text-pink-600 uppercase"
+                                            >
+                                                Write another
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </main>
+                    <footer className="fixed bottom-4 text-pink-300 text-xs font-bold uppercase tracking-widest pointer-events-none">
+                        Always & Forever
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
